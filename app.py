@@ -69,21 +69,46 @@ color_map = {
 df['color'] = df['Calidad del Aire'].map(color_map)
 df['color'] = df['color'].apply(lambda x: list(x) if isinstance(x, (list, tuple)) else [128, 128, 128])
 
-# Selector de sensor
+st.sidebar.header("Filtros diarios")
+
+# Selector de sensor (único para resumen diario)
 if 'sensor_id' in df.columns:
     sensores_disponibles = sorted(df['sensor_id'].unique())
-    sensor_seleccionado = st.selectbox("🔎 Selecciona sensor", sensores_disponibles)
-    df = df[df['sensor_id'] == sensor_seleccionado]
+    sensor_seleccionado = st.sidebar.selectbox("🔎 Selecciona sensor", sensores_disponibles)
+    df_filtrado = df[df['sensor_id'] == sensor_seleccionado]
+else:
+    df_filtrado = df.copy()
 
-# Selector de fecha
-fechas_disponibles = sorted(df['fecha'].unique())
-fecha_seleccionada = st.selectbox("📅 Selecciona una fecha", fechas_disponibles)
-df_fecha = df[df['fecha'] == fecha_seleccionada]
+# Selector de fecha (única fecha para resumen diario)
+fechas_disponibles = sorted(df_filtrado['fecha'].unique())
+fecha_seleccionada = st.sidebar.selectbox("📅 Selecciona una fecha", fechas_disponibles)
+df_fecha = df_filtrado[df_filtrado['fecha'] == fecha_seleccionada]
 
-st.write(f"## 📊 Datos del sensor {sensor_seleccionado} para el día {fecha_seleccionada}")
+# --- RESUMEN DIARIO ---
 
-# Tabla con links
-cols_tabla = ['local_time', 'PM 2.5', 'PM 10', 'CO', 'O3', 'NO2', 'Calidad del Aire', 'Mapa']
+st.markdown("## 📅 Resumen Diario")
+
+num_registros = len(df_fecha)
+st.write(f"- Sensor seleccionado: **{sensor_seleccionado if 'sensor_seleccionado' in locals() else 'N/A'}**")
+st.write(f"- Fecha seleccionada: **{fecha_seleccionada}**")
+st.write(f"- Número de registros para este filtro: **{num_registros}**")
+
+if num_registros > 0:
+    promedios = {}
+    for col in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2']:
+        if col in df_fecha.columns:
+            promedios[col] = df_fecha[col].mean()
+    if promedios:
+        st.write("**Promedios de contaminantes:**")
+        for contaminante, valor in promedios.items():
+            st.write(f"- {contaminante}: {valor:.2f}")
+else:
+    st.write("No hay datos disponibles para el filtro aplicado.")
+
+# Mostrar tabla con links
+st.write(f"### 📊 Datos del sensor {sensor_seleccionado} para el día {fecha_seleccionada}")
+
+cols_tabla = ['sensor_id', 'local_time', 'PM 2.5', 'PM 10', 'CO', 'O3', 'NO2', 'Calidad del Aire', 'Mapa']
 cols_tabla = [col for col in cols_tabla if col in df_fecha.columns]
 
 def tabla_con_links(df, columnas):
@@ -104,20 +129,21 @@ st.markdown(tabla_con_links(df_fecha, cols_tabla), unsafe_allow_html=True)
 
 # Gráfico
 contaminantes = [c for c in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2'] if c in df_fecha.columns]
-contaminante_sel = st.selectbox("📈 Selecciona contaminante para graficar", contaminantes)
-df_fecha['hora'] = df_fecha['local_time'].dt.hour
+if contaminantes:
+    contaminante_sel = st.selectbox("📈 Selecciona contaminante para graficar", contaminantes)
+    df_fecha['hora'] = df_fecha['local_time'].dt.hour
 
-fig, ax = plt.subplots()
-for calidad in df_fecha['Calidad del Aire'].unique():
-    subset = df_fecha[df_fecha['Calidad del Aire'] == calidad]
-    color = [c / 255 for c in color_map.get(calidad, [128, 128, 128])]
-    ax.scatter(subset['hora'], subset[contaminante_sel], label=calidad, color=color)
+    fig, ax = plt.subplots()
+    for calidad in df_fecha['Calidad del Aire'].unique():
+        subset = df_fecha[df_fecha['Calidad del Aire'] == calidad]
+        color = [c / 255 for c in color_map.get(calidad, [128, 128, 128])]
+        ax.scatter(subset['hora'], subset[contaminante_sel], label=calidad, color=color)
 
-ax.set_xlabel("Hora del día")
-ax.set_ylabel(contaminante_sel)
-ax.set_title(f"{contaminante_sel} a lo largo del día")
-ax.legend(title="Calidad del Aire")
-st.pyplot(fig)
+    ax.set_xlabel("Hora del día")
+    ax.set_ylabel(contaminante_sel)
+    ax.set_title(f"{contaminante_sel} a lo largo del día")
+    ax.legend(title="Calidad del Aire")
+    st.pyplot(fig)
 
 # Mapa
 if lat_col and lon_col and not df_fecha.empty:
@@ -125,7 +151,7 @@ if lat_col and lon_col and not df_fecha.empty:
         "ScatterplotLayer",
         data=df_fecha.to_dict(orient="records"),
         get_position=[lon_col, lat_col],
-        get_fill_color=lambda d: d['color'],
+        get_fill_color="color",
         get_radius=100,
         pickable=True,
     )
@@ -140,4 +166,48 @@ if lat_col and lon_col and not df_fecha.empty:
         initial_view_state=view_state,
         map_style="mapbox://styles/mapbox/light-v9"
     )
-   
+    st.pydeck_chart(r)
+
+# --- RESUMEN MÚLTIPLE (varios sensores y rango de fechas) ---
+
+st.sidebar.header("Filtros para resumen múltiple")
+
+# Selector múltiple de sensores
+if 'sensor_id' in df.columns:
+    sensores_multi = st.sidebar.multiselect("🔎 Selecciona uno o más sensores", sensores_disponibles, default=sensores_disponibles)
+else:
+    sensores_multi = []
+
+# Selector rango de fechas
+fecha_min = df['fecha'].min()
+fecha_max = df['fecha'].max()
+rango_fechas = st.sidebar.date_input("📅 Selecciona rango de fechas", [fecha_min, fecha_max], min_value=fecha_min, max_value=fecha_max)
+
+if isinstance(rango_fechas, list) and len(rango_fechas) == 2:
+    start_date, end_date = rango_fechas
+else:
+    start_date = end_date = fecha_min
+
+df_multi = df.copy()
+if sensores_multi:
+    df_multi = df_multi[df_multi['sensor_id'].isin(sensores_multi)]
+df_multi = df_multi[(df_multi['fecha'] >= start_date) & (df_multi['fecha'] <= end_date)]
+
+st.markdown("## 📅 Resumen múltiple")
+
+num_registros_multi = len(df_multi)
+st.write(f"- Sensores seleccionados: **{', '.join(map(str, sensores_multi)) if sensores_multi else 'Todos'}**")
+st.write(f"- Rango de fechas: **{start_date}** a **{end_date}**")
+st.write(f"- Número total de registros para estos filtros: **{num_registros_multi}**")
+
+if num_registros_multi > 0:
+    promedios_multi = {}
+    for col in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2']:
+        if col in df_multi.columns:
+            promedios_multi[col] = df_multi[col].mean()
+    if promedios_multi:
+        st.write("**Promedios de contaminantes en resumen múltiple:**")
+        for contaminante, valor in promedios_multi.items():
+            st.write(f"- {contaminante}: {valor:.2f}")
+else:
+    st.write("No hay datos disponibles para el filtro aplicado en resumen múltiple.")
