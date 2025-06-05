@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pydeck as pdk
 import gdown
 
+st.set_page_config(page_title="Monitor de Calidad del Aire", layout="wide")
 st.title("🌎 Monitor de Calidad del Aire")
 
 # Descargar archivo desde Google Drive
@@ -71,7 +72,6 @@ df['color'] = df['color'].apply(lambda x: list(x) if isinstance(x, (list, tuple)
 
 st.sidebar.header("Filtros diarios")
 
-# Selector de sensor (único para resumen diario)
 if 'sensor_id' in df.columns:
     sensores_disponibles = sorted(df['sensor_id'].unique())
     sensor_seleccionado = st.sidebar.selectbox("🔎 Selecciona sensor", sensores_disponibles)
@@ -79,12 +79,9 @@ if 'sensor_id' in df.columns:
 else:
     df_filtrado = df.copy()
 
-# Selector de fecha (única fecha para resumen diario)
 fechas_disponibles = sorted(df_filtrado['fecha'].unique())
 fecha_seleccionada = st.sidebar.selectbox("📅 Selecciona una fecha", fechas_disponibles)
 df_fecha = df_filtrado[df_filtrado['fecha'] == fecha_seleccionada]
-
-# --- RESUMEN DIARIO ---
 
 st.markdown("## 📅 Resumen Diario")
 
@@ -98,52 +95,89 @@ if num_registros > 0:
     for col in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2']:
         if col in df_fecha.columns:
             promedios[col] = df_fecha[col].mean()
+
     if promedios:
-        st.write("**Promedios de contaminantes:**")
-        for contaminante, valor in promedios.items():
-            st.write(f"- {contaminante}: {valor:.2f}")
-else:
-    st.write("No hay datos disponibles para el filtro aplicado.")
+        # Panel visual
+        indice = promedios.get('PM 2.5', 0)
+        if indice <= 12: valor_indice = 25
+        elif indice <= 35.4: valor_indice = 63
+        elif indice <= 55.4: valor_indice = 100
+        elif indice <= 150.4: valor_indice = 150
+        else: valor_indice = 200
 
-# Mostrar tabla con links
-st.write(f"### 📊 Datos del sensor {sensor_seleccionado} para el día {fecha_seleccionada}")
+        nivel_calidad = clasificar_pm25(indice)
+        icono = {
+            "Buena": "🟢", "Moderada": "🟡", "Dañina a sensibles": "🟠",
+            "Dañina": "🔴", "Muy dañina": "🟣", "Peligrosa": "⚫", "Sin dato": "⚪"
+        }.get(nivel_calidad, "⚪")
 
-cols_tabla = ['sensor_id', 'local_time', 'PM 2.5', 'PM 10', 'CO', 'O3', 'NO2', 'Calidad del Aire', 'Mapa']
-cols_tabla = [col for col in cols_tabla if col in df_fecha.columns]
+        st.markdown("## 🧭 Panel de Calidad del Aire")
+        col1, col2 = st.columns([1, 2])
 
-def tabla_con_links(df, columnas):
-    tabla_md = "| " + " | ".join(columnas) + " |\n"
-    tabla_md += "| " + " | ".join(["---"] * len(columnas)) + " |\n"
-    for _, fila in df[columnas].iterrows():
-        fila_str = []
-        for col in columnas:
-            val = fila[col]
-            if col == "Mapa" and val != "":
-                fila_str.append(val)
-            else:
-                fila_str.append(str(val))
-        tabla_md += "| " + " | ".join(fila_str) + " |\n"
-    return tabla_md
+        with col1:
+            st.markdown(f"""
+            <div style='background-color:#0d3b66; color:white; padding: 20px; border-radius: 10px; text-align: center;'>
+                <h2 style='font-size: 48px; margin: 0;'>{valor_indice}</h2>
+                <p style='font-size: 18px; margin: 5px 0;'>Índice CITEAIR</p>
+                <p style='font-size: 20px; font-weight: bold;'>{icono} {nivel_calidad}</p>
+                <small>Contaminante principal: PM 2.5</small>
+            </div>
+            """, unsafe_allow_html=True)
 
-st.markdown(tabla_con_links(df_fecha, cols_tabla), unsafe_allow_html=True)
+        with col2:
+            st.markdown("### 🔬 Promedios de Contaminantes")
+            cols = st.columns(5)
+            unidades = {
+                'PM 2.5': 'μg/m³', 'PM 10': 'μg/m³', 'CO': 'ppb', 'O3': 'ppb', 'NO2': 'ppb'
+            }
+            for i, (cont, unidad) in enumerate(unidades.items()):
+                if cont in promedios:
+                    with cols[i]:
+                        st.markdown(f"""
+                        <div style='background:#f4f4f4; padding:10px; border-radius:10px; text-align:center'>
+                            <h4 style='margin:0'>{cont}</h4>
+                            <p style='font-size:20px; margin:0'><strong>{promedios[cont]:.2f}</strong> <sub>{unidad}</sub></p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-# Gráfico
-contaminantes = [c for c in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2'] if c in df_fecha.columns]
-if contaminantes:
-    contaminante_sel = st.selectbox("📈 Selecciona contaminante para graficar", contaminantes)
-    df_fecha['hora'] = df_fecha['local_time'].dt.hour
+    # Tabla con links
+    st.write(f"### 📊 Datos del sensor {sensor_seleccionado} para el día {fecha_seleccionada}")
+    cols_tabla = ['sensor_id', 'local_time', 'PM 2.5', 'PM 10', 'CO', 'O3', 'NO2', 'Calidad del Aire', 'Mapa']
+    cols_tabla = [col for col in cols_tabla if col in df_fecha.columns]
 
-    fig, ax = plt.subplots()
-    for calidad in df_fecha['Calidad del Aire'].unique():
-        subset = df_fecha[df_fecha['Calidad del Aire'] == calidad]
-        color = [c / 255 for c in color_map.get(calidad, [128, 128, 128])]
-        ax.scatter(subset['hora'], subset[contaminante_sel], label=calidad, color=color)
+    def tabla_con_links(df, columnas):
+        tabla_md = "| " + " | ".join(columnas) + " |\n"
+        tabla_md += "| " + " | ".join(["---"] * len(columnas)) + " |\n"
+        for _, fila in df[columnas].iterrows():
+            fila_str = []
+            for col in columnas:
+                val = fila[col]
+                if col == "Mapa" and val != "":
+                    fila_str.append(val)
+                else:
+                    fila_str.append(str(val))
+            tabla_md += "| " + " | ".join(fila_str) + " |\n"
+        return tabla_md
 
-    ax.set_xlabel("Hora del día")
-    ax.set_ylabel(contaminante_sel)
-    ax.set_title(f"{contaminante_sel} a lo largo del día")
-    ax.legend(title="Calidad del Aire")
-    st.pyplot(fig)
+    st.markdown(tabla_con_links(df_fecha, cols_tabla), unsafe_allow_html=True)
+
+    # Gráfica de contaminantes
+    contaminantes = [c for c in ['PM 2.5', 'PM 10', 'CO', 'O3', 'NO2'] if c in df_fecha.columns]
+    if contaminantes:
+        contaminante_sel = st.selectbox("📈 Selecciona contaminante para graficar", contaminantes)
+        df_fecha['hora'] = df_fecha['local_time'].dt.hour
+
+        fig, ax = plt.subplots()
+        for calidad in df_fecha['Calidad del Aire'].unique():
+            subset = df_fecha[df_fecha['Calidad del Aire'] == calidad]
+            color = [c / 255 for c in color_map.get(calidad, [128, 128, 128])]
+            ax.scatter(subset['hora'], subset[contaminante_sel], label=calidad, color=color)
+
+        ax.set_xlabel("Hora del día")
+        ax.set_ylabel(contaminante_sel)
+        ax.set_title(f"{contaminante_sel} a lo largo del día")
+        ax.legend(title="Calidad del Aire")
+        st.pyplot(fig)
 
 # Mapa
 if lat_col and lon_col and not df_fecha.empty:
@@ -168,17 +202,14 @@ if lat_col and lon_col and not df_fecha.empty:
     )
     st.pydeck_chart(r)
 
-# --- RESUMEN MÚLTIPLE (varios sensores y rango de fechas) ---
-
+# Resumen múltiple
 st.sidebar.header("Filtros para resumen múltiple")
 
-# Selector múltiple de sensores
 if 'sensor_id' in df.columns:
     sensores_multi = st.sidebar.multiselect("🔎 Selecciona uno o más sensores", sensores_disponibles, default=sensores_disponibles)
 else:
     sensores_multi = []
 
-# Selector rango de fechas
 fecha_min = df['fecha'].min()
 fecha_max = df['fecha'].max()
 rango_fechas = st.sidebar.date_input("📅 Selecciona rango de fechas", [fecha_min, fecha_max], min_value=fecha_min, max_value=fecha_max)
