@@ -140,4 +140,4 @@ if lat_col and lon_col and not df_fecha.empty:
         initial_view_state=view_state,
         map_style="mapbox://styles/mapbox/light-v9"
     )
-    st.pydeck_chart(r)
+   
