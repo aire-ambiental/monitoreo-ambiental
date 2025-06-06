@@ -15,7 +15,7 @@ archivo = "datos.xlsx"
 try:
     gdown.download(url, archivo, quiet=False)
     df = pd.read_excel(archivo)
-    st.success("✅ Archivo cargado automáticamente desde Google Drive")
+    st.success("✅ Informacion cargada automáticamente")
 except Exception as e:
     st.error("❌ No se pudo cargar el archivo automáticamente.")
     st.exception(e)
