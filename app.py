@@ -179,13 +179,41 @@ if num_registros > 0:
         ax.legend(title="Calidad del Aire")
         st.pyplot(fig)
 
-# 🗺️ Mapa simple con st.map() usando OpenStreetMap (sin Mapbox)
+from streamlit_folium import folium_static
+import folium
+
 if lat_col and lon_col and not df_fecha.empty:
-    st.markdown("### 🗺️ Mapa del Recorrido Diario (Mapa base OpenStreetMap)")
+    st.markdown("### 🗺️ Trayecto del Sensor Durante el Día (Mapa interactivo con Folium)")
 
-    # Preparar DataFrame: renombrar columnas a 'lat' y 'lon'
-    df_map = df_fecha.dropna(subset=[lat_col, lon_col]).copy()
-    df_map = df_map.rename(columns={lat_col: "lat", lon_col: "lon"})
+    # Crear el mapa base centrado en el promedio de ubicación
+    m = folium.Map(
+        location=[df_fecha[lat_col].mean(), df_fecha[lon_col].mean()],
+        zoom_start=13,
+        control_scale=True
+    )
 
-    # Mostrar mapa simple
-    st.map(df_map[['lat', 'lon']])
+    # Agregar puntos al mapa con color personalizado
+    for _, row in df_fecha.iterrows():
+        if pd.notnull(row[lat_col]) and pd.notnull(row[lon_col]):
+            # Convertir RGB a HEX para folium
+            try:
+                rgb = row['color']
+                color_hex = "#{:02x}{:02x}{:02x}".format(*rgb)
+            except:
+                color_hex = "#808080"
+
+            folium.CircleMarker(
+                location=[row[lat_col], row[lon_col]],
+                radius=5,
+                color=color_hex,
+                fill=True,
+                fill_color=color_hex,
+                fill_opacity=0.8,
+                popup=folium.Popup(
+                    f"{row['local_time']}<br>PM 2.5: {row.get('PM 2.5', 'N/A')}<br>{row.get('Calidad del Aire', '')}",
+                    max_width=300
+                )
+            ).add_to(m)
+
+    # Mostrar el mapa en Streamlit
+    folium_static(m)
