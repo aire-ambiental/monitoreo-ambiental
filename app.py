@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import pydeck as pdk
 import gdown
 
-st.set_page_config(page_title="Monitor de Calidad del Aire", layout="wide")
-st.title("🌎 Monitor de Calidad del Aire")
+st.set_page_config(page_title="Evaluación de Calidad del Aire", layout="wide")
+st.title("🌎 Evaluación de Calidad del Aire")
 
 # Descargar archivo desde Google Drive
 file_id = "1e8q6VZvEvu9VGymnNwFVO7rsP-miTAXu"
@@ -183,7 +183,7 @@ from streamlit_folium import folium_static
 import folium
 
 if lat_col and lon_col and not df_fecha.empty:
-    st.markdown("### 🗺️ Trayecto del Sensor Durante el Día (Mapa interactivo con Folium)")
+    st.markdown("### 🗺️ Trayecto del Sensor Durante el Día (Mapa interactivo)")
 
     # Crear el mapa base centrado en el promedio de ubicación
     m = folium.Map(
@@ -211,7 +211,7 @@ if lat_col and lon_col and not df_fecha.empty:
                 fill_opacity=0.8,
                 popup=folium.Popup(
                     f"{row['local_time']}<br>PM 2.5: {row.get('PM 2.5', 'N/A')}<br>{row.get('Calidad del Aire', '')}",
-                    max_width=300
+                    max_width=500
                 )
             ).add_to(m)
 
