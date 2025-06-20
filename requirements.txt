@@ -4,3 +4,5 @@ matplotlib
 pydeck
 openpyxl
 gdown
+folium
+streamlit-folium
