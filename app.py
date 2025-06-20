@@ -220,3 +220,14 @@ if lat_col and lon_col and not df_fecha.empty:
         initial_view_state=view_state,
         layers=[layer]
     ))
+
+# 🗺️ Mapa simple con st.map() usando OpenStreetMap (sin Mapbox)
+if lat_col and lon_col and not df_fecha.empty:
+    st.markdown("### 🗺️ Mapa del Recorrido Diario (Mapa base OpenStreetMap)")
+
+    # Preparar DataFrame: renombrar columnas a 'lat' y 'lon'
+    df_map = df_fecha.dropna(subset=[lat_col, lon_col]).copy()
+    df_map = df_map.rename(columns={lat_col: "lat", lon_col: "lon"})
+
+    # Mostrar mapa simple
+    st.map(df_map[['lat', 'lon']])
