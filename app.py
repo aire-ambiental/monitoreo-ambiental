@@ -179,48 +179,6 @@ if num_registros > 0:
         ax.legend(title="Calidad del Aire")
         st.pyplot(fig)
 
-# 🗺️ Mapa del trayecto diario con puntos de medición codificados por calidad del aire
-if lat_col and lon_col and not df_fecha.empty:
-    st.markdown("### 🗺️ Trayecto del Sensor Durante el Día")
-
-    import numpy as np
-
-    # 🔧 Preparar DataFrame para el mapa
-    df_mapa = df_fecha[[lat_col, lon_col, 'color']].copy()
-    df_mapa = df_mapa.dropna(subset=[lat_col, lon_col, 'color'])
-    df_mapa[lat_col] = df_mapa[lat_col].astype(float)
-    df_mapa[lon_col] = df_mapa[lon_col].astype(float)
-
-    # Asegurar que color esté en formato correcto
-    df_mapa['color'] = df_mapa['color'].apply(
-        lambda x: [int(i) for i in x] if isinstance(x, (list, tuple, np.ndarray)) and not pd.isnull(x).any() else [128, 128, 128]
-    )
-
-    # Crear la capa de puntos
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df_mapa,
-        get_position=f"[{lon_col}, {lat_col}]",
-        get_color="color",
-        get_radius=50,
-        pickable=True
-    )
-
-    # Vista centrada en el promedio del trayecto
-    view_state = pdk.ViewState(
-        latitude=df_mapa[lat_col].mean(),
-        longitude=df_mapa[lon_col].mean(),
-        zoom=12,
-        pitch=0
-    )
-
-    # Mostrar mapa
-    st.pydeck_chart(pdk.Deck(
-        map_style="mapbox://styles/mapbox/light-v9",
-        initial_view_state=view_state,
-        layers=[layer]
-    ))
-
 # 🗺️ Mapa simple con st.map() usando OpenStreetMap (sin Mapbox)
 if lat_col and lon_col and not df_fecha.empty:
     st.markdown("### 🗺️ Mapa del Recorrido Diario (Mapa base OpenStreetMap)")
